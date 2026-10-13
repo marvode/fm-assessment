@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Live.Api/Live.Api.csproj" />
+    <Project Path="src/Live.AppHost/Live.AppHost.csproj" />
+    <Project Path="src/Live.Core/Live.Core.csproj" />
+    <Project Path="src/Live.ServiceDefaults/Live.ServiceDefaults.csproj" />
+    <Project Path="src/Practice.Common/Practice.Common.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Live.Tests/Live.Tests.csproj" />
+  </Folder>
+</Solution>
