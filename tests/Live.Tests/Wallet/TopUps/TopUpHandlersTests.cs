@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Live.Wallet.Ledger;
 using Live.Wallet.Persistence;
 using Live.Wallet.Providers;
 using Live.Wallet.TopUps;
@@ -142,6 +143,58 @@ public sealed class TopUpHandlersTests
         result.Value.Status.Should().Be("Failed");
         (await _testDb.GetWalletAsync(_userId)).Balance.Should().Be(0);
         (await _testDb.QueryAsync(q => q.LedgerEntries.CountAsync(e => e.TransactionId == result.Value.Id))).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_failure_webhook_racing_behind_a_success_does_not_overwrite_it()
+    {
+        var providerReferenceId = await StartTopUpAsync(5_000);
+        var successFirst = new ConcurrentWriteInterceptor(times: 1, async () =>
+        {
+            await using var other = _testDb.CreateContext();
+            await Complete(other).SucceedAsync(providerReferenceId, 5_000, CancellationToken.None);
+        });
+        await using var db = _testDb.CreateContext(successFirst);
+
+        var result = await Complete(db).FailAsync(providerReferenceId, CancellationToken.None);
+
+        result.Value.Status.Should().Be("Succeeded");
+        (await _testDb.QueryAsync(q => q.Transactions.SingleAsync(t => t.Id == result.Value.Id))).Status.Should().Be(TransactionStatus.Succeeded);
+        (await _testDb.GetWalletAsync(_userId)).Balance.Should().Be(5_000);
+    }
+
+    [Fact]
+    public async Task Concurrent_identical_initiations_create_one_top_up()
+    {
+        var twin = new ConcurrentWriteInterceptor(times: 1, async () =>
+        {
+            await using var other = _testDb.CreateContext();
+            await Initiate(other).HandleAsync(Command(5_000), CancellationToken.None);
+        });
+        await using var db = _testDb.CreateContext(twin);
+
+        var result = await Initiate(db).HandleAsync(Command(5_000), CancellationToken.None);
+
+        result.Value.Replayed.Should().BeTrue();
+        (await _testDb.QueryAsync(q => q.Transactions.CountAsync())).Should().Be(1);
+        (await _testDb.QueryAsync(q => q.Accounts.CountAsync(a => a.UserId == _userId))).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Concurrent_first_top_ups_share_one_wallet()
+    {
+        var other = new ConcurrentWriteInterceptor(times: 1, async () =>
+        {
+            await using var otherDb = _testDb.CreateContext();
+            await Initiate(otherDb).HandleAsync(Command(1_000, referenceId: "topup-other"), CancellationToken.None);
+        });
+        await using var db = _testDb.CreateContext(other);
+
+        var result = await Initiate(db).HandleAsync(Command(5_000), CancellationToken.None);
+
+        result.Value.Replayed.Should().BeFalse();
+        (await _testDb.QueryAsync(q => q.Accounts.CountAsync(a => a.UserId == _userId))).Should().Be(1);
+        (await _testDb.QueryAsync(q => q.Transactions.CountAsync())).Should().Be(2);
     }
 
     private InitiateTopUpHandler Initiate(WalletDbContext db) => new(db, _provider, _clock);

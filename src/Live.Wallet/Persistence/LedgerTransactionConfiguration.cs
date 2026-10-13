@@ -11,7 +11,8 @@ internal sealed class LedgerTransactionConfiguration : IEntityTypeConfiguration<
         builder.ToTable("Transactions", table => table.HasCheckConstraint("CK_Transactions_Amount", "\"Amount\" > 0"));
         builder.HasKey(t => t.Id);
         builder.Property(t => t.Type).HasConversion<string>().HasMaxLength(16);
-        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(16);
+        // Concurrency token: a status change only commits if nobody finalised the transaction first.
+        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();
         builder.Property(t => t.ReferenceId).HasMaxLength(128);
         builder.Property(t => t.ProviderReferenceId).HasMaxLength(128);
         builder.Property(t => t.RequestHash).HasMaxLength(64);
