@@ -15,7 +15,7 @@ Always run and verify via terminal before finishing a task:
 - **Build**: `dotnet build --no-restore`
 - **Run Tests**: `dotnet test --no-build --verbosity normal`
 - **Format Code**: `dotnet format --verify-no-changes` (or `dotnet format` to apply fixes)
-- **Run App**: `dotnet run --project src/MyProject.Api`
+- **Run App**: `dotnet run --project src/Wallet.Api` (or `aspire run` for Postgres + RabbitMQ)
 
 ## 3. Code Style & C# Conventions
 - **Naming**:

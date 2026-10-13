@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "src/Live.AppHost/Live.AppHost.csproj"
+    "path": "src/Wallet.AppHost/Wallet.AppHost.csproj"
   }
 }

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Wallet.Api/Wallet.Api.csproj" />
+    <Project Path="src/Wallet.AppHost/Wallet.AppHost.csproj" />
+    <Project Path="src/Wallet.Ledger/Wallet.Ledger.csproj" />
+    <Project Path="src/Wallet.ServiceDefaults/Wallet.ServiceDefaults.csproj" />
+    <Project Path="src/Wallet.Common/Wallet.Common.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Wallet.Tests/Wallet.Tests.csproj" />
+  </Folder>
+</Solution>
