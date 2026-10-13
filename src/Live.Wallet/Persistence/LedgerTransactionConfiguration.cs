@@ -1,0 +1,24 @@
+using Live.Wallet.Ledger;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace Live.Wallet.Persistence;
+
+internal sealed class LedgerTransactionConfiguration : IEntityTypeConfiguration<LedgerTransaction>
+{
+    public void Configure(EntityTypeBuilder<LedgerTransaction> builder)
+    {
+        builder.ToTable("Transactions", table => table.HasCheckConstraint("CK_Transactions_Amount", "\"Amount\" > 0"));
+        builder.HasKey(t => t.Id);
+        builder.Property(t => t.Type).HasConversion<string>().HasMaxLength(16);
+        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(16);
+        builder.Property(t => t.ReferenceId).HasMaxLength(128);
+        builder.Property(t => t.ProviderReferenceId).HasMaxLength(128);
+        builder.Property(t => t.RequestHash).HasMaxLength(64);
+        builder.HasIndex(t => t.ReferenceId).IsUnique();
+        builder.HasIndex(t => t.ProviderReferenceId).IsUnique().HasFilter("\"ProviderReferenceId\" IS NOT NULL");
+        builder.HasIndex(t => new { t.AccountId, t.CreatedAt });
+        builder.HasIndex(t => new { t.Type, t.Status, t.CreatedAt });
+        builder.HasOne<Account>().WithMany().HasForeignKey(t => t.AccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
