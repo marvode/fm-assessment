@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Live.Api\Live.Api.csproj" />
-    <ProjectReference Include="..\..\src\Live.Core\Live.Core.csproj" />
     <ProjectReference Include="..\..\src\Live.Wallet\Live.Wallet.csproj" />
     <ProjectReference Include="..\..\src\Practice.Common\Practice.Common.csproj" />
   </ItemGroup>

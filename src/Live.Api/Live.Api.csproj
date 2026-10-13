@@ -8,7 +8,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Live.Core\Live.Core.csproj" />
     <ProjectReference Include="..\Live.ServiceDefaults\Live.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Live.Wallet\Live.Wallet.csproj" />
   </ItemGroup>
