@@ -6,6 +6,7 @@
 - **Language**: C# 14 (don't use primary constructors)
 - **AI Integration**: `Microsoft.Extensions.AI` / `Microsoft.Extensions.VectorData` (if applicable)
 - **Architecture**: Vertical Slice Architecture organized by feature folders (or Clean Architecture with distinct Domain, Application, Infrastructure, and API layers).
+- **API Style**: ASP.NET Core MVC controllers (`[ApiController]`, attribute routing). Do not use Minimal APIs (`app.MapGet`/`MapPost`, etc.) for endpoints.
 - **Primary Goal**: Keep code decoupled, testable, and strongly typed. Avoid throwing exceptions for control flow; use `Result<T>` or pattern matching.
 
 ## 2. Build & Test Commands
@@ -23,7 +24,7 @@ Always run and verify via terminal before finishing a task:
   - Constants / Static Readonly: `PascalCase` or `UPPER_SNAKE_CASE` as per local repo rules.
 - **File Organization**:
   - One primary type per file (match file name to class/interface name).
-  - Feature-based grouping: Keep commands, handlers, endpoints, and DTOs close inside their feature slice.
+  - Feature-based grouping: Keep commands, handlers, controllers, and DTOs close inside their feature slice.
 - **Dependency Injection**:
   - Register services cleanly in `Program.dev.cs` / `Extensions/ServiceCollectionExtensions.cs`.
   - Prefer constructor injection via explicit constructors assigning `private readonly` fields.
