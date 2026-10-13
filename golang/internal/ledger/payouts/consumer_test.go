@@ -146,3 +146,21 @@ func TestHandleLeavesADeliveryUnsettledWhenShuttingDown(t *testing.T) {
 	require.Empty(t, a.nacks, "the broker redelivers unacked messages after the channel closes")
 	require.Empty(t, r.attempts)
 }
+
+func TestHandleLeavesADeliveryUnsettledWhenShutdownInterruptsTheRetry(t *testing.T) {
+	a := &acknowledger{}
+	shutdown, cancel := context.WithCancel(ctx)
+	r := &cancellingRetrier{cancel: cancel}
+
+	consumer(failing).Handle(shutdown, delivery(a, validBody()), r)
+
+	require.Zero(t, a.acks)
+	require.Empty(t, a.nacks, "a retry cut short by shutdown must not also requeue the original")
+}
+
+type cancellingRetrier struct{ cancel context.CancelFunc }
+
+func (r *cancellingRetrier) Retry(ctx context.Context, _ amqp.Delivery, _ int32) error {
+	r.cancel()
+	return ctx.Err()
+}

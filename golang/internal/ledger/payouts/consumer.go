@@ -142,6 +142,9 @@ func (c *Consumer) Handle(ctx context.Context, delivery amqp.Delivery, retrier R
 	case <-time.After(c.RetryDelay):
 	}
 	if err := retrier.Retry(ctx, delivery, attempts); err != nil {
+		if ctx.Err() != nil {
+			return // shutting down: leave the original unsettled for redelivery
+		}
 		c.log.Warn("republishing payout retry failed; requeueing", "transaction_id", message.TransactionID, "error", err)
 		c.settle(delivery.Nack(false, true))
 		return

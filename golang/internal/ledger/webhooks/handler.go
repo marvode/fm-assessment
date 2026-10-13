@@ -42,6 +42,9 @@ func NewHandler(s *store.Store, topUps *topups.CompleteHandler, settle *withdraw
 }
 
 func (h *Handler) Handle(ctx context.Context, webhook Webhook) (wallets.TransactionResponse, error) {
+	if domain.HasNUL(webhook.ProviderReferenceID) {
+		return wallets.TransactionResponse{}, domain.Validation("ProviderReferenceId", "ProviderReferenceId must not contain NUL bytes.")
+	}
 	switch webhook.Event {
 	case ChargeSuccess:
 		return h.topUps.Succeed(ctx, webhook.ProviderReferenceID, webhook.Amount)

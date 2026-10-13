@@ -250,3 +250,26 @@ func TestReferenceIDsAreScopedToEachUsersWallet(t *testing.T) {
 	require.NotEqual(t, mine.Transaction.ID, theirs.Transaction.ID)
 	require.NotEqual(t, *mine.Transaction.ProviderReferenceID, *theirs.Transaction.ProviderReferenceID)
 }
+
+// observingProvider records how many pool connections were checked out when the provider was called.
+type observingProvider struct {
+	*providers.FakePaymentProvider
+	s        *store.Store
+	acquired []int32
+}
+
+func (p *observingProvider) InitiateCharge(ctx context.Context, referenceID string, amount int64) (providers.ChargeInitiation, error) {
+	p.acquired = append(p.acquired, p.s.Pool().Stat().AcquiredConns())
+	return p.FakePaymentProvider.InitiateCharge(ctx, referenceID, amount)
+}
+
+// A slow provider must not hold a database connection: pool exhaustion would stall every other request.
+func TestInitiateChargesTheProviderWithNoDatabaseConnectionHeld(t *testing.T) {
+	f := newFixture(t)
+	provider := &observingProvider{FakePaymentProvider: f.provider, s: f.s}
+
+	_, err := topups.NewInitiateHandler(f.s, provider, f.clock).Handle(ctx, f.command(5_000))
+
+	require.NoError(t, err)
+	require.Equal(t, []int32{0}, provider.acquired)
+}

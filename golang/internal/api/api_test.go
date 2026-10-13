@@ -249,6 +249,10 @@ func TestBadBodiesAreValidationProblems(t *testing.T) {
 		{withdrawals, `{"referenceId":"w","amount":5,"accountNumber":"0123456789","accountName":"A"}`, "Validation.BankCode"},
 		{"/webhooks/provider", `{"providerReferenceId":"x","amount":1}`, "Validation.Event"},
 		{"/webhooks/provider", `{"event":"charge.success","amount":1}`, "Validation.ProviderReferenceId"},
+		{topUps, `{"referenceId":"a\u0000b","amount":5}`, "Validation.ReferenceId"},
+		{withdrawals, `{"referenceId":"w","amount":5,"bankCode":"058","accountNumber":"0123456789","accountName":"A\u0000"}`, "Validation.AccountName"},
+		{"/webhooks/provider", `{"event":"charge.success","providerReferenceId":"a\u0000","amount":1}`, "Validation.ProviderReferenceId"},
+		{"/webhooks/provider", `{"event":"transfer.success","providerReferenceId":"a\u0000","amount":1}`, "Validation.ProviderReferenceId"},
 	}
 	for _, c := range cases {
 		response := s.do(t, http.MethodPost, c.path, c.body)

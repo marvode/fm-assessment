@@ -18,7 +18,10 @@ import (
 // ErrUnroutable means the broker returned a mandatory message because no queue was bound for it.
 var ErrUnroutable = errors.New("rabbitmq returned the message as unroutable")
 
-const confirmTimeout = 10 * time.Second
+const (
+	confirmTimeout = 10 * time.Second
+	returnsBuffer  = 64
+)
 
 // RabbitPublisher publishes outbox messages with publisher confirms, so Publish returns only after the broker has
 // the message. Publishes are serialised on one confirm-mode channel, which is reopened when it closes.
@@ -66,8 +69,15 @@ func (p *RabbitPublisher) Publish(ctx context.Context, messageType string, paylo
 	}
 	// The broker sends basic.return before the ack, and amqp091 delivers it to p.returns before resolving the
 	// confirmation, so a return for this message is already buffered.
+	return checkReturned(p.returns, messageID)
+}
+
+func checkReturned(returns <-chan amqp.Return, messageID uuid.UUID) error {
 	select {
-	case returned := <-p.returns:
+	case returned, ok := <-returns:
+		if !ok {
+			return nil // amqp091 closes the returns channel with the AMQP channel; the confirm already succeeded
+		}
 		return fmt.Errorf("%w: %s (%d %s)", ErrUnroutable, messageID, returned.ReplyCode, returned.ReplyText)
 	default:
 		return nil
@@ -90,7 +100,9 @@ func (p *RabbitPublisher) channel() (*amqp.Channel, error) {
 		_ = ch.Close()
 		return nil, err
 	}
-	p.returns = ch.NotifyReturn(make(chan amqp.Return, 1))
+	// amqp091 sends returns synchronously on the connection's reader goroutine, so a full buffer would stall the
+	// whole connection. Publish drains it every time; the headroom covers returns from timed-out publishes.
+	p.returns = ch.NotifyReturn(make(chan amqp.Return, returnsBuffer))
 	p.ch = ch
 	return ch, nil
 }

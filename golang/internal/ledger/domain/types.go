@@ -55,9 +55,13 @@ var ProviderSettlementID = uuid.MustParse("00000000-0000-0000-0000-000000000001"
 
 const ProviderSettlementName = "ProviderSettlement"
 
-// BlankOrLonger reports whether s is empty, whitespace only, or longer than max characters.
+// BlankOrLonger reports whether s is empty, whitespace only, longer than max characters, or contains a NUL byte
+// (which Postgres text cannot store).
 func BlankOrLonger(s string, max int) bool {
-	return strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > max
+	return strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > max || HasNUL(s)
 }
+
+// HasNUL reports whether s contains a NUL byte, which Postgres rejects in text values.
+func HasNUL(s string) bool { return strings.ContainsRune(s, 0) }
 
 func newID() uuid.UUID { return uuid.Must(uuid.NewV7()) }
