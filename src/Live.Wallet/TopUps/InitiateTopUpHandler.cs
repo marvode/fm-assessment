@@ -38,15 +38,19 @@ public sealed class InitiateTopUpHandler
         var requestHash = RequestHash.Compute(nameof(TransactionType.TopUp), command.UserId, command.Amount);
         for (var attempt = 1; ; attempt++)
         {
-            var replay = await Idempotency.FindReplayAsync(_db, command.ReferenceId, requestHash, cancellationToken).ConfigureAwait(false);
-            if (replay is not null)
+            var now = _clock.UtcNow;
+            var (wallet, created) = await WalletAccounts.GetOrCreateAsync(_db, command.UserId, now, cancellationToken).ConfigureAwait(false);
+            if (!created)
             {
-                return replay;
+                var replay = await Idempotency.FindReplayAsync(_db, wallet.Id, command.ReferenceId, requestHash, cancellationToken).ConfigureAwait(false);
+                if (replay is not null)
+                {
+                    return replay;
+                }
             }
 
-            var now = _clock.UtcNow;
-            var (wallet, _) = await WalletAccounts.GetOrCreateAsync(_db, command.UserId, now, cancellationToken).ConfigureAwait(false);
-            var charge = await _provider.InitiateChargeAsync(command.ReferenceId, command.Amount, cancellationToken).ConfigureAwait(false);
+            var chargeKey = ProviderKeys.Charge(wallet.Id, command.ReferenceId);
+            var charge = await _provider.InitiateChargeAsync(chargeKey, command.Amount, cancellationToken).ConfigureAwait(false);
             var transaction = LedgerTransaction.StartTopUp(wallet.Id, command.Amount, command.ReferenceId, requestHash, charge.ProviderReferenceId, now);
             _db.Transactions.Add(transaction);
             try

@@ -162,5 +162,21 @@ public sealed class RequestWithdrawalHandlerTests
         (await _testDb.QueryAsync(q => q.Transactions.CountAsync(t => t.Type == TransactionType.Withdrawal))).Should().Be(1);
     }
 
+    [Fact]
+    public async Task Reference_ids_are_scoped_to_each_users_wallet()
+    {
+        var otherUserId = Guid.NewGuid();
+        await _testDb.SeedWalletAsync(_userId, 10_000, TestDb.Start);
+        await _testDb.SeedWalletAsync(otherUserId, 10_000, TestDb.Start);
+        await using var db = _testDb.CreateContext();
+
+        var mine = await Handler(db).HandleAsync(TestCommands.Withdrawal(_userId, 4_000), CancellationToken.None);
+        var theirs = await Handler(db).HandleAsync(TestCommands.Withdrawal(otherUserId, 4_000), CancellationToken.None);
+
+        theirs.Value.Replayed.Should().BeFalse();
+        theirs.Value.Transaction.Id.Should().NotBe(mine.Value.Transaction.Id);
+        (await _testDb.GetWalletAsync(otherUserId)).AvailableBalance.Should().Be(6_000);
+    }
+
     private RequestWithdrawalHandler Handler(WalletDbContext db) => new(db, _clock);
 }

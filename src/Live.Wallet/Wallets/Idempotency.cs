@@ -8,14 +8,14 @@ namespace Live.Wallet.Wallets;
 internal static class Idempotency
 {
     /// <summary>
-    /// Null when the referenceId is new. Otherwise the original transaction when the request matches,
+    /// Null when the referenceId is new for this wallet. Otherwise the original transaction when the request matches,
     /// or DuplicateReference when the same referenceId arrives with a different request.
     /// </summary>
     public static async Task<Result<IdempotentResponse>?> FindReplayAsync(
-        WalletDbContext db, string referenceId, string requestHash, CancellationToken cancellationToken)
+        WalletDbContext db, Guid accountId, string referenceId, string requestHash, CancellationToken cancellationToken)
     {
         var existing = await db.Transactions.AsNoTracking()
-            .SingleOrDefaultAsync(t => t.ReferenceId == referenceId, cancellationToken)
+            .SingleOrDefaultAsync(t => t.AccountId == accountId && t.ReferenceId == referenceId, cancellationToken)
             .ConfigureAwait(false);
         if (existing is null)
         {

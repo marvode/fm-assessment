@@ -169,17 +169,17 @@ namespace Live.Wallet.Persistence.Migrations
                 columns: new[] { "AccountId", "CreatedAt" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Transactions_AccountId_ReferenceId",
+                table: "Transactions",
+                columns: new[] { "AccountId", "ReferenceId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Transactions_ProviderReferenceId",
                 table: "Transactions",
                 column: "ProviderReferenceId",
                 unique: true,
                 filter: "\"ProviderReferenceId\" IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Transactions_ReferenceId",
-                table: "Transactions",
-                column: "ReferenceId",
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_Type_Status_CreatedAt",

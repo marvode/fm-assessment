@@ -16,7 +16,8 @@ internal sealed class LedgerTransactionConfiguration : IEntityTypeConfiguration<
         builder.Property(t => t.ReferenceId).HasMaxLength(128);
         builder.Property(t => t.ProviderReferenceId).HasMaxLength(128);
         builder.Property(t => t.RequestHash).HasMaxLength(64);
-        builder.HasIndex(t => t.ReferenceId).IsUnique();
+        // Client referenceIds are idempotency keys scoped to one wallet.
+        builder.HasIndex(t => new { t.AccountId, t.ReferenceId }).IsUnique();
         builder.HasIndex(t => t.ProviderReferenceId).IsUnique().HasFilter("\"ProviderReferenceId\" IS NOT NULL");
         builder.HasIndex(t => new { t.AccountId, t.CreatedAt });
         builder.HasIndex(t => new { t.Type, t.Status, t.CreatedAt });

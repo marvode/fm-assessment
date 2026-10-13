@@ -197,6 +197,20 @@ public sealed class TopUpHandlersTests
         (await _testDb.QueryAsync(q => q.Transactions.CountAsync())).Should().Be(2);
     }
 
+    [Fact]
+    public async Task Reference_ids_are_scoped_to_each_users_wallet()
+    {
+        var otherUserId = Guid.NewGuid();
+        await using var db = _testDb.CreateContext();
+
+        var mine = await Initiate(db).HandleAsync(Command(5_000), CancellationToken.None);
+        var theirs = await Initiate(db).HandleAsync(Command(5_000) with { UserId = otherUserId }, CancellationToken.None);
+
+        theirs.Value.Replayed.Should().BeFalse();
+        theirs.Value.Transaction.Id.Should().NotBe(mine.Value.Transaction.Id);
+        theirs.Value.Transaction.ProviderReferenceId.Should().NotBe(mine.Value.Transaction.ProviderReferenceId);
+    }
+
     private InitiateTopUpHandler Initiate(WalletDbContext db) => new(db, _provider, _clock);
 
     private CompleteTopUpHandler Complete(WalletDbContext db) => new(db, _clock, NullLogger<CompleteTopUpHandler>.Instance);

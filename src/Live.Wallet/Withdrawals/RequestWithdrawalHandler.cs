@@ -37,17 +37,17 @@ public sealed class RequestWithdrawalHandler
 
         return await ConcurrencyRetry.ExecuteAsync<IdempotentResponse>(_db, async ct =>
         {
-            // Checked inside the retry: a racing identical request may have committed since the last attempt.
-            var replay = await Idempotency.FindReplayAsync(_db, command.ReferenceId, requestHash, ct).ConfigureAwait(false);
-            if (replay is not null)
-            {
-                return replay;
-            }
-
             var wallet = await WalletAccounts.FindAsync(_db, command.UserId, ct).ConfigureAwait(false);
             if (wallet is null)
             {
                 return WalletErrors.WalletNotFound;
+            }
+
+            // Checked inside the retry: a racing identical request may have committed since the last attempt.
+            var replay = await Idempotency.FindReplayAsync(_db, wallet.Id, command.ReferenceId, requestHash, ct).ConfigureAwait(false);
+            if (replay is not null)
+            {
+                return replay;
             }
 
             var hold = wallet.PlaceHold(command.Amount);

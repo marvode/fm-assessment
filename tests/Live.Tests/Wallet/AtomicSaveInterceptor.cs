@@ -60,10 +60,10 @@ internal sealed class AtomicSaveInterceptor : SaveChangesInterceptor
     {
         foreach (var added in context.ChangeTracker.Entries<LedgerTransaction>().Where(e => e.State == EntityState.Added))
         {
-            var referenceId = added.Entity.ReferenceId;
-            if (await store.Transactions.AnyAsync(t => t.ReferenceId == referenceId, cancellationToken))
+            var (accountId, referenceId) = (added.Entity.AccountId, added.Entity.ReferenceId);
+            if (await store.Transactions.AnyAsync(t => t.AccountId == accountId && t.ReferenceId == referenceId, cancellationToken))
             {
-                throw new DbUpdateException($"Duplicate key: IX_Transactions_ReferenceId ({referenceId}).");
+                throw new DbUpdateException($"Duplicate key: IX_Transactions_AccountId_ReferenceId ({referenceId}).");
             }
         }
 

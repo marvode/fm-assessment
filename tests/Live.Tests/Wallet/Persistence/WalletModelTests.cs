@@ -19,13 +19,13 @@ public sealed class WalletModelTests
     }
 
     [Fact]
-    public void Reference_ids_are_unique()
+    public void Reference_ids_are_unique_per_wallet()
     {
         using var db = CreateNpgsqlContext();
         var transactions = Entity<LedgerTransaction>(db);
 
         transactions.GetIndexes().Should().ContainSingle(i =>
-            i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name == nameof(LedgerTransaction.ReferenceId));
+            i.IsUnique && i.Properties.Select(p => p.Name).SequenceEqual(new[] { nameof(LedgerTransaction.AccountId), nameof(LedgerTransaction.ReferenceId) }));
         transactions.GetIndexes().Should().ContainSingle(i =>
             i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name == nameof(LedgerTransaction.ProviderReferenceId)
             && i.GetFilter() == "\"ProviderReferenceId\" IS NOT NULL");

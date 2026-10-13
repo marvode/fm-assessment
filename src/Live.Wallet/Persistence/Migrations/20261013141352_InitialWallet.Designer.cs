@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Live.Wallet.Persistence.Migrations
 {
     [DbContext(typeof(WalletDbContext))]
-    [Migration("20261013140322_InitialWallet")]
+    [Migration("20261013141352_InitialWallet")]
     partial class InitialWallet
     {
         /// <inheritdoc />
@@ -173,6 +173,7 @@ namespace Live.Wallet.Persistence.Migrations
                         .HasColumnType("character varying(64)");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
@@ -188,10 +189,10 @@ namespace Live.Wallet.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"ProviderReferenceId\" IS NOT NULL");
 
-                    b.HasIndex("ReferenceId")
-                        .IsUnique();
-
                     b.HasIndex("AccountId", "CreatedAt");
+
+                    b.HasIndex("AccountId", "ReferenceId")
+                        .IsUnique();
 
                     b.HasIndex("Type", "Status", "CreatedAt");
 
