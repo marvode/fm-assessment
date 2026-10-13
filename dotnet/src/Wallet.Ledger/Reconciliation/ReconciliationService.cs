@@ -27,7 +27,7 @@ public sealed partial class ReconciliationService : BackgroundService
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var summary = await scope.ServiceProvider.GetRequiredService<PendingPayoutSweeper>().SweepAsync(stoppingToken).ConfigureAwait(false);
-                LogSweepCompleted(_logger, summary.Settled, summary.Released, summary.StillPending, summary.Errors);
+                LogSweepCompleted(_logger, summary.Settled, summary.Released, summary.Redriven, summary.StillPending, summary.Errors);
                 await scope.ServiceProvider.GetRequiredService<LedgerInvariantChecker>().CheckAsync(stoppingToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
@@ -37,8 +37,8 @@ public sealed partial class ReconciliationService : BackgroundService
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Payout sweep: {Settled} settled, {Released} released, {StillPending} still pending, {Errors} errors")]
-    private static partial void LogSweepCompleted(ILogger logger, int settled, int released, int stillPending, int errors);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Payout sweep: {Settled} settled, {Released} released, {Redriven} re-queued, {StillPending} still pending, {Errors} errors")]
+    private static partial void LogSweepCompleted(ILogger logger, int settled, int released, int redriven, int stillPending, int errors);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Reconciliation run failed")]
     private static partial void LogReconciliationFailed(ILogger logger, Exception exception);

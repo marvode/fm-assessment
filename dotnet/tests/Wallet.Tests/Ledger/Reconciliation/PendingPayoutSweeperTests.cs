@@ -80,6 +80,37 @@ public sealed class PendingPayoutSweeperTests
     }
 
     [Fact]
+    public async Task Resubmits_an_accepted_payout_the_provider_has_lost_instead_of_requeueing_forever()
+    {
+        var transactionId = await SubmittedWithdrawalAsync();
+        var restartedProvider = new FakePaymentProvider();
+        _clock.Advance(TimeSpan.FromMinutes(16));
+
+        await using (var db = _testDb.CreateContext())
+        {
+            (await Sweeper(db, restartedProvider).SweepAsync(CancellationToken.None)).Redriven.Should().Be(1);
+        }
+
+        (await _testDb.GetTransactionAsync(transactionId)).ProviderReferenceId.Should().BeNull("the provider no longer knows that reference");
+        await using (var db = _testDb.CreateContext())
+        {
+            var processor = new PayoutProcessor(
+                db, restartedProvider, new ReleaseWithdrawalHandler(db, _clock, NullLogger<ReleaseWithdrawalHandler>.Instance), NullLogger<PayoutProcessor>.Instance);
+            var outcome = await processor.ProcessAsync(new PayoutRequested { TransactionId = transactionId }, CancellationToken.None);
+            outcome.Value.Should().Be(PayoutProcessingOutcome.Initiated);
+        }
+
+        restartedProvider.PayoutAttempts.Should().Be(1);
+        await using (var db = _testDb.CreateContext())
+        {
+            var nextSweep = await Sweeper(db, restartedProvider).SweepAsync(CancellationToken.None);
+            nextSweep.Should().BeEquivalentTo(new SweepSummary { Settled = 0, Released = 0, Redriven = 0, StillPending = 1, Errors = 0 });
+        }
+
+        (await _testDb.GetWalletAsync(_userId)).AvailableBalance.Should().Be(6_000);
+    }
+
+    [Fact]
     public async Task Leaves_payouts_the_provider_still_has_pending()
     {
         await SubmittedWithdrawalAsync();
@@ -92,10 +123,10 @@ public sealed class PendingPayoutSweeperTests
         (await _testDb.GetWalletAsync(_userId)).AvailableBalance.Should().Be(6_000);
     }
 
-    private PendingPayoutSweeper Sweeper(WalletDbContext db) =>
+    private PendingPayoutSweeper Sweeper(WalletDbContext db, IPaymentProvider? provider = null) =>
         new(
             db,
-            _provider,
+            provider ?? _provider,
             new SettleWithdrawalHandler(db, _clock),
             new ReleaseWithdrawalHandler(db, _clock, NullLogger<ReleaseWithdrawalHandler>.Instance),
             _clock,

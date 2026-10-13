@@ -43,6 +43,9 @@ public sealed class LedgerTransaction
 
     public void AssignProviderReference(string providerReferenceId) => ProviderReferenceId = providerReferenceId;
 
+    /// <summary>Forgets a provider reference the provider no longer recognises, so the payout can be submitted again.</summary>
+    public void ClearProviderReference() => ProviderReferenceId = null;
+
     public void MarkSucceeded(DateTimeOffset now) => Complete(TransactionStatus.Succeeded, now);
 
     public void MarkFailed(DateTimeOffset now) => Complete(TransactionStatus.Failed, now);

@@ -80,8 +80,16 @@ public sealed partial class PendingPayoutSweeper
                     if (releasedResult.IsSuccess) { released++; } else { errors++; }
                     break;
                 case PayoutStatus.NotFound:
-                    // The provider never received it (e.g. the message was dead-lettered). Keep the hold and queue the
-                    // request again: the payout key is idempotent and the processor skips final withdrawals.
+                    // The provider never received it (e.g. the message was dead-lettered) or has lost it. Keep the hold and
+                    // queue the request again: the payout key is idempotent and the processor skips final withdrawals.
+                    // A stored provider reference would make the processor skip the resubmission, so it goes in the same save.
+                    var withdrawal = await _db.Transactions.SingleAsync(t => t.Id == transactionId, cancellationToken).ConfigureAwait(false);
+                    if (withdrawal.ProviderReferenceId is { } lostReference)
+                    {
+                        LogProviderReferenceLost(_logger, transactionId, lostReference);
+                        withdrawal.ClearProviderReference();
+                    }
+
                     _db.OutboxMessages.Add(PayoutRequested.ToOutboxMessage(transactionId, _clock.UtcNow));
                     await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                     LogPayoutRedriven(_logger, transactionId);
@@ -101,4 +109,7 @@ public sealed partial class PendingPayoutSweeper
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Withdrawal {TransactionId} is past the pending threshold but unknown to the provider; keeping the hold and re-queueing the payout")]
     private static partial void LogPayoutRedriven(ILogger logger, Guid transactionId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Provider has no record of accepted payout {ProviderReferenceId} for withdrawal {TransactionId}; resubmitting it")]
+    private static partial void LogProviderReferenceLost(ILogger logger, Guid transactionId, string providerReferenceId);
 }
