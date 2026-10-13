@@ -11,9 +11,9 @@ internal sealed class WithdrawalDetailsConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("Withdrawals");
         builder.HasKey(w => w.TransactionId);
-        builder.Property(w => w.BankCode).HasMaxLength(16);
-        builder.Property(w => w.AccountNumber).HasMaxLength(10);
-        builder.Property(w => w.AccountName).HasMaxLength(128);
+        builder.Property(w => w.BankCode).HasMaxLength(FieldLimits.BankCodeMaxLength);
+        builder.Property(w => w.AccountNumber).HasMaxLength(FieldLimits.AccountNumberLength);
+        builder.Property(w => w.AccountName).HasMaxLength(FieldLimits.AccountNameMaxLength);
         builder.HasOne<LedgerTransaction>().WithOne().HasForeignKey<WithdrawalDetails>(w => w.TransactionId).OnDelete(DeleteBehavior.Restrict);
     }
 }

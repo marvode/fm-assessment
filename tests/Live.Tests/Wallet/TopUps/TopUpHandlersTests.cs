@@ -56,6 +56,17 @@ public sealed class TopUpHandlersTests
     }
 
     [Fact]
+    public async Task Initiate_rejects_an_oversized_reference_before_charging()
+    {
+        await using var db = _testDb.CreateContext();
+
+        var result = await Initiate(db).HandleAsync(Command(5_000, referenceId: new string('r', 129)), CancellationToken.None);
+
+        result.Error.Code.Should().Be("Validation.ReferenceId");
+        (await _testDb.QueryAsync(q => q.Transactions.CountAsync())).Should().Be(0);
+    }
+
+    [Fact]
     public async Task Initiate_replays_an_identical_request()
     {
         await using var db = _testDb.CreateContext();

@@ -1,4 +1,5 @@
 using Live.Wallet.Ledger;
+using Live.Wallet.Payouts;
 using Live.Wallet.Persistence;
 using Live.Wallet.Providers;
 using Live.Wallet.Withdrawals;
@@ -11,7 +12,7 @@ namespace Live.Wallet.Reconciliation;
 
 /// <summary>
 /// Asks the provider about withdrawals still Pending after the threshold, and settles or releases them through the webhook handlers.
-/// A payout the provider has never seen stays held: a delayed outbox message may still submit it, and releasing could pay out and refund.
+/// A payout the provider has never seen stays held and is re-queued: releasing could pay out and refund if a delayed message still submits it.
 /// </summary>
 public sealed partial class PendingPayoutSweeper
 {
@@ -51,7 +52,7 @@ public sealed partial class PendingPayoutSweeper
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        int settled = 0, released = 0, stillPending = 0, errors = 0;
+        int settled = 0, released = 0, redriven = 0, stillPending = 0, errors = 0;
         foreach (var transactionId in stale)
         {
             PayoutStatus status;
@@ -59,7 +60,7 @@ public sealed partial class PendingPayoutSweeper
             {
                 status = await _provider.GetPayoutStatusAsync(ProviderKeys.Payout(transactionId), cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 errors++;
                 LogStatusQueryFailed(_logger, exception, transactionId);
@@ -79,8 +80,12 @@ public sealed partial class PendingPayoutSweeper
                     if (releasedResult.IsSuccess) { released++; } else { errors++; }
                     break;
                 case PayoutStatus.NotFound:
-                    LogPayoutUnknownToProvider(_logger, transactionId);
-                    stillPending++;
+                    // The provider never received it (e.g. the message was dead-lettered). Keep the hold and queue the
+                    // request again: the payout key is idempotent and the processor skips final withdrawals.
+                    _db.OutboxMessages.Add(PayoutRequested.ToOutboxMessage(transactionId, _clock.UtcNow));
+                    await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    LogPayoutRedriven(_logger, transactionId);
+                    redriven++;
                     break;
                 default:
                     stillPending++;
@@ -88,12 +93,12 @@ public sealed partial class PendingPayoutSweeper
             }
         }
 
-        return new SweepSummary { Settled = settled, Released = released, StillPending = stillPending, Errors = errors };
+        return new SweepSummary { Settled = settled, Released = released, Redriven = redriven, StillPending = stillPending, Errors = errors };
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Querying the provider for withdrawal {TransactionId} failed")]
     private static partial void LogStatusQueryFailed(ILogger logger, Exception exception, Guid transactionId);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Withdrawal {TransactionId} is past the pending threshold but unknown to the provider; keeping the hold for manual review")]
-    private static partial void LogPayoutUnknownToProvider(ILogger logger, Guid transactionId);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Withdrawal {TransactionId} is past the pending threshold but unknown to the provider; keeping the hold and re-queueing the payout")]
+    private static partial void LogPayoutRedriven(ILogger logger, Guid transactionId);
 }

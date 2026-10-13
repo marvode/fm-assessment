@@ -70,7 +70,7 @@ public sealed partial class RabbitMqPayoutConsumer : BackgroundService
 
             LogProcessingFailed(_logger, message.TransactionId, result.Error.Code);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             LogTransientFailure(_logger, exception, message.TransactionId);
         }

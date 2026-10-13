@@ -75,6 +75,20 @@ public sealed class PayoutProcessorTests
     }
 
     [Fact]
+    public async Task An_acceptance_without_a_provider_reference_keeps_the_hold()
+    {
+        var transactionId = await WalletScenarios.PendingWithdrawalAsync(_testDb, _clock, _userId, 10_000, 4_000);
+        _provider.PayoutBehaviour = _ => new PayoutInitiation { Outcome = PayoutOutcome.Accepted };
+        await using var db = _testDb.CreateContext();
+
+        var process = () => Processor(db).ProcessAsync(new PayoutRequested { TransactionId = transactionId }, CancellationToken.None);
+
+        await process.Should().ThrowAsync<InvalidOperationException>();
+        (await _testDb.GetTransactionAsync(transactionId)).IsFinal.Should().BeFalse();
+        (await _testDb.GetWalletAsync(_userId)).AvailableBalance.Should().Be(6_000);
+    }
+
+    [Fact]
     public async Task Redelivered_message_after_acceptance_does_not_pay_twice()
     {
         var transactionId = await WalletScenarios.PendingWithdrawalAsync(_testDb, _clock, _userId, 10_000, 4_000);

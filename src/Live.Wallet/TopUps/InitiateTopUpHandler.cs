@@ -30,9 +30,9 @@ public sealed class InitiateTopUpHandler
             return WalletErrors.InvalidAmount;
         }
 
-        if (string.IsNullOrWhiteSpace(command.ReferenceId))
+        if (string.IsNullOrWhiteSpace(command.ReferenceId) || command.ReferenceId.Length > FieldLimits.ReferenceIdMaxLength)
         {
-            return WalletErrors.Validation("ReferenceId", "ReferenceId is required.");
+            return WalletErrors.Validation("ReferenceId", $"ReferenceId is required and at most {FieldLimits.ReferenceIdMaxLength} characters.");
         }
 
         var requestHash = RequestHash.Compute(nameof(TransactionType.TopUp), command.UserId, command.Amount);
@@ -58,7 +58,7 @@ public sealed class InitiateTopUpHandler
                 await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return new IdempotentResponse { Transaction = TransactionResponse.From(transaction), Replayed = false };
             }
-            catch (DbUpdateException exception) when (exception is not DbUpdateConcurrencyException && attempt < MaxAttempts)
+            catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception) && attempt < MaxAttempts)
             {
                 // A concurrent request committed this referenceId or opened this user's wallet first (unique index).
                 // Retry against what it committed: the replay check or the existing wallet now finds it.

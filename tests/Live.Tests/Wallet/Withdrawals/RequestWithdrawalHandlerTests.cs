@@ -95,6 +95,28 @@ public sealed class RequestWithdrawalHandlerTests
         result.Error.Code.Should().Be(expectedCode);
     }
 
+    [Theory]
+    [InlineData("ReferenceId")]
+    [InlineData("BankCode")]
+    [InlineData("AccountName")]
+    public async Task Oversized_fields_are_rejected(string field)
+    {
+        await _testDb.SeedWalletAsync(_userId, 10_000, TestDb.Start);
+        await using var db = _testDb.CreateContext();
+        var command = TestCommands.Withdrawal(_userId, 100);
+        command = field switch
+        {
+            "ReferenceId" => command with { ReferenceId = new string('r', 129) },
+            "BankCode" => command with { BankCode = new string('1', 17) },
+            _ => command with { AccountName = new string('a', 129) },
+        };
+
+        var result = await Handler(db).HandleAsync(command, CancellationToken.None);
+
+        result.Error.Code.Should().Be($"Validation.{field}");
+        (await _testDb.GetWalletAsync(_userId)).AvailableBalance.Should().Be(10_000);
+    }
+
     [Fact]
     public async Task An_identical_retry_returns_the_original_without_a_second_hold()
     {

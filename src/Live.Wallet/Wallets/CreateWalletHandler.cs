@@ -27,7 +27,7 @@ public sealed class CreateWalletHandler
         {
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException exception) when (exception is not DbUpdateConcurrencyException)
+        catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception))
         {
             // A concurrent create won the unique (UserId, Currency) index on Postgres; return the winner's wallet.
             _db.ChangeTracker.Clear();

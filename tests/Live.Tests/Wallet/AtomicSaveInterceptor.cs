@@ -2,6 +2,7 @@ using Live.Wallet.Ledger;
 using Live.Wallet.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 
 namespace Live.Tests.Wallet;
 
@@ -30,8 +31,9 @@ internal sealed class AtomicSaveInterceptor : SaveChangesInterceptor
         }
 
         await using var store = _openStoreView();
-        await CheckConcurrencyTokensAsync(eventData.Context, store, cancellationToken);
+        // Unique indexes first: on Postgres a racing duplicate INSERT fails with 23505 before the stale UPDATE is detected.
         await CheckUniqueIndexesAsync(eventData.Context, store, cancellationToken);
+        await CheckConcurrencyTokensAsync(eventData.Context, store, cancellationToken);
         return result;
     }
 
@@ -63,7 +65,7 @@ internal sealed class AtomicSaveInterceptor : SaveChangesInterceptor
             var (accountId, referenceId) = (added.Entity.AccountId, added.Entity.ReferenceId);
             if (await store.Transactions.AnyAsync(t => t.AccountId == accountId && t.ReferenceId == referenceId, cancellationToken))
             {
-                throw new DbUpdateException($"Duplicate key: IX_Transactions_AccountId_ReferenceId ({referenceId}).");
+                throw UniqueViolation("IX_Transactions_AccountId_ReferenceId");
             }
         }
 
@@ -72,8 +74,12 @@ internal sealed class AtomicSaveInterceptor : SaveChangesInterceptor
             var userId = added.Entity.UserId;
             if (await store.Accounts.AnyAsync(a => a.UserId == userId, cancellationToken))
             {
-                throw new DbUpdateException($"Duplicate key: IX_Accounts_UserId_Currency ({userId}).");
+                throw UniqueViolation("IX_Accounts_UserId_Currency");
             }
         }
     }
+
+    // Shaped like Npgsql's error so production code sees exactly what Postgres would raise.
+    private static DbUpdateException UniqueViolation(string index) =>
+        new($"Duplicate key on {index}.", new PostgresException($"duplicate key value violates unique constraint \"{index}\"", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation));
 }

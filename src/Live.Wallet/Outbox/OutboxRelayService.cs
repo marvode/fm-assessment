@@ -28,7 +28,7 @@ public sealed partial class OutboxRelayService : BackgroundService
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<OutboxRelay>().RelayPendingAsync(stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
             {
                 LogRelayFailed(_logger, exception);
             }

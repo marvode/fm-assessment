@@ -1,6 +1,4 @@
-using System.Text.Json;
 using Live.Wallet.Ledger;
-using Live.Wallet.Outbox;
 using Live.Wallet.Payouts;
 using Live.Wallet.Persistence;
 using Live.Wallet.Wallets;
@@ -14,8 +12,6 @@ namespace Live.Wallet.Withdrawals;
 /// </summary>
 public sealed class RequestWithdrawalHandler
 {
-    private const int NubanLength = 10;
-
     private readonly WalletDbContext _db;
     private readonly IClock _clock;
 
@@ -60,8 +56,7 @@ public sealed class RequestWithdrawalHandler
             var transaction = LedgerTransaction.StartWithdrawal(wallet.Id, command.Amount, command.ReferenceId, requestHash, now);
             _db.Transactions.Add(transaction);
             _db.Withdrawals.Add(WithdrawalDetails.Create(transaction.Id, command.BankCode, command.AccountNumber, command.AccountName));
-            var payload = JsonSerializer.Serialize(new PayoutRequested { TransactionId = transaction.Id }, WalletJsonContext.Default.PayoutRequested);
-            _db.OutboxMessages.Add(OutboxMessage.Create(PayoutRequested.MessageType, payload, now));
+            _db.OutboxMessages.Add(PayoutRequested.ToOutboxMessage(transaction.Id, now));
             return new IdempotentResponse { Transaction = TransactionResponse.From(transaction), Replayed = false };
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -73,24 +68,24 @@ public sealed class RequestWithdrawalHandler
             return WalletErrors.InvalidAmount;
         }
 
-        if (string.IsNullOrWhiteSpace(command.ReferenceId))
+        if (string.IsNullOrWhiteSpace(command.ReferenceId) || command.ReferenceId.Length > FieldLimits.ReferenceIdMaxLength)
         {
-            return WalletErrors.Validation("ReferenceId", "ReferenceId is required.");
+            return WalletErrors.Validation("ReferenceId", $"ReferenceId is required and at most {FieldLimits.ReferenceIdMaxLength} characters.");
         }
 
-        if (string.IsNullOrWhiteSpace(command.BankCode))
+        if (string.IsNullOrWhiteSpace(command.BankCode) || command.BankCode.Length > FieldLimits.BankCodeMaxLength)
         {
-            return WalletErrors.Validation("BankCode", "BankCode is required.");
+            return WalletErrors.Validation("BankCode", $"BankCode is required and at most {FieldLimits.BankCodeMaxLength} characters.");
         }
 
-        if (command.AccountNumber.Length != NubanLength || !command.AccountNumber.All(char.IsAsciiDigit))
+        if (command.AccountNumber.Length != FieldLimits.AccountNumberLength || !command.AccountNumber.All(char.IsAsciiDigit))
         {
             return WalletErrors.Validation("AccountNumber", "AccountNumber must be a 10-digit NUBAN.");
         }
 
-        if (string.IsNullOrWhiteSpace(command.AccountName))
+        if (string.IsNullOrWhiteSpace(command.AccountName) || command.AccountName.Length > FieldLimits.AccountNameMaxLength)
         {
-            return WalletErrors.Validation("AccountName", "AccountName is required.");
+            return WalletErrors.Validation("AccountName", $"AccountName is required and at most {FieldLimits.AccountNameMaxLength} characters.");
         }
 
         return null;

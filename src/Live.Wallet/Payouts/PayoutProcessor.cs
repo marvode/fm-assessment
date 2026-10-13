@@ -61,11 +61,17 @@ public sealed partial class PayoutProcessor
         };
         var initiation = await _provider.InitiatePayoutAsync(instruction, cancellationToken).ConfigureAwait(false);
 
-        if (initiation is { Outcome: PayoutOutcome.Accepted, ProviderReferenceId: { } providerReferenceId })
+        switch (initiation)
         {
-            transaction.AssignProviderReference(providerReferenceId);
-            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            return PayoutProcessingOutcome.Initiated;
+            case { Outcome: PayoutOutcome.Accepted, ProviderReferenceId: { } providerReferenceId }:
+                transaction.AssignProviderReference(providerReferenceId);
+                await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                return PayoutProcessingOutcome.Initiated;
+            case { Outcome: PayoutOutcome.Rejected }:
+                break;
+            default:
+                // Ambiguous: the provider may have paid. Releasing could double-spend, so fail the delivery and let it retry.
+                throw new InvalidOperationException($"Provider returned an unusable payout result ({initiation.Outcome}, no reference) for withdrawal {transaction.Id}.");
         }
 
         var released = await _release

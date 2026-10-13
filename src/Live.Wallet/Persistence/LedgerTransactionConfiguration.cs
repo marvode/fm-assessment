@@ -13,7 +13,7 @@ internal sealed class LedgerTransactionConfiguration : IEntityTypeConfiguration<
         builder.Property(t => t.Type).HasConversion<string>().HasMaxLength(16);
         // Concurrency token: a status change only commits if nobody finalised the transaction first.
         builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();
-        builder.Property(t => t.ReferenceId).HasMaxLength(128);
+        builder.Property(t => t.ReferenceId).HasMaxLength(FieldLimits.ReferenceIdMaxLength);
         builder.Property(t => t.ProviderReferenceId).HasMaxLength(128);
         builder.Property(t => t.RequestHash).HasMaxLength(64);
         // Client referenceIds are idempotency keys scoped to one wallet.

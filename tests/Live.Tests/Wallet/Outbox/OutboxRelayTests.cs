@@ -54,6 +54,21 @@ public sealed class OutboxRelayTests
     }
 
     [Fact]
+    public async Task A_publish_timeout_is_recorded_rather_than_treated_as_shutdown()
+    {
+        var timingOut = await AddMessageAsync();
+        await AddMessageAsync();
+        _publisher.TimeOutWhen = id => id == timingOut;
+        await using var db = _testDb.CreateContext();
+
+        (await Relay(db).RelayPendingAsync(CancellationToken.None)).Should().Be(1);
+
+        var failed = await _testDb.QueryAsync(q => q.OutboxMessages.SingleAsync(m => m.Id == timingOut));
+        failed.ProcessedAt.Should().BeNull();
+        failed.Attempts.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Publishes_at_most_one_batch_per_run()
     {
         await AddMessageAsync();

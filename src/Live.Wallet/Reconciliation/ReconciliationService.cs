@@ -30,7 +30,7 @@ public sealed partial class ReconciliationService : BackgroundService
                 LogSweepCompleted(_logger, summary.Settled, summary.Released, summary.StillPending, summary.Errors);
                 await scope.ServiceProvider.GetRequiredService<LedgerInvariantChecker>().CheckAsync(stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
             {
                 LogReconciliationFailed(_logger, exception);
             }

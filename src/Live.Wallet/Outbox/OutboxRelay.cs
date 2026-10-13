@@ -51,7 +51,7 @@ public sealed partial class OutboxRelay
                 message.MarkProcessed(_clock.UtcNow);
                 published++;
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 message.RecordFailure(exception.Message);
                 LogPublishFailed(_logger, exception, message.Id, message.Attempts);

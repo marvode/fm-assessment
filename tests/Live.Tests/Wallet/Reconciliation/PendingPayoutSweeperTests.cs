@@ -5,6 +5,7 @@ using Live.Wallet.Persistence;
 using Live.Wallet.Providers;
 using Live.Wallet.Reconciliation;
 using Live.Wallet.Withdrawals;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Practice.Common;
@@ -57,12 +58,12 @@ public sealed class PendingPayoutSweeperTests
 
         var summary = await Sweeper(db).SweepAsync(CancellationToken.None);
 
-        summary.Should().BeEquivalentTo(new SweepSummary { Settled = 0, Released = 0, StillPending = 0, Errors = 0 });
+        summary.Should().BeEquivalentTo(new SweepSummary { Settled = 0, Released = 0, Redriven = 0, StillPending = 0, Errors = 0 });
         (await _testDb.GetTransactionAsync(transactionId)).IsFinal.Should().BeFalse();
     }
 
     [Fact]
-    public async Task Keeps_a_payout_the_provider_has_never_seen_on_hold()
+    public async Task Keeps_a_payout_the_provider_has_never_seen_on_hold_and_requeues_it()
     {
         var transactionId = await WalletScenarios.PendingWithdrawalAsync(_testDb, _clock, _userId, 10_000, 4_000);
         _clock.Advance(TimeSpan.FromMinutes(16));
@@ -70,9 +71,12 @@ public sealed class PendingPayoutSweeperTests
 
         var summary = await Sweeper(db).SweepAsync(CancellationToken.None);
 
-        summary.StillPending.Should().Be(1);
+        summary.Redriven.Should().Be(1);
         (await _testDb.GetTransactionAsync(transactionId)).IsFinal.Should().BeFalse();
         (await _testDb.GetWalletAsync(_userId)).AvailableBalance.Should().Be(6_000);
+        var payoutRequests = await _testDb.QueryAsync(q => q.OutboxMessages.Where(m => m.Type == PayoutRequested.MessageType).ToListAsync());
+        payoutRequests.Should().HaveCount(2, "the original request plus the sweeper's re-drive");
+        payoutRequests.Should().OnlyContain(m => m.Payload.Contains(transactionId.ToString()));
     }
 
     [Fact]

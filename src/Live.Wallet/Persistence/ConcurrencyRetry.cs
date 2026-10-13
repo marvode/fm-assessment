@@ -5,8 +5,8 @@ using Practice.Common;
 namespace Live.Wallet.Persistence;
 
 /// <summary>
-/// Runs load → change → save. If another writer changed a tracked account first, the save fails on its Version token.
-/// The operation then reruns from a clean change tracker, so balance checks see the latest state.
+/// Runs load → change → save. If another writer changed a tracked row first (a stale concurrency token) or committed the
+/// same unique key (e.g. an identical retry), the operation reruns from a clean change tracker and sees the latest state.
 /// </summary>
 public static class ConcurrencyRetry
 {
@@ -31,7 +31,7 @@ public static class ConcurrencyRetry
                 await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return result;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateException exception) when (exception is DbUpdateConcurrencyException || DbErrors.IsUniqueViolation(exception))
             {
                 db.ChangeTracker.Clear();
                 if (attempt == MaxAttempts)
