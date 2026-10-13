@@ -6,7 +6,7 @@ outbox → RabbitMQ → payout semantics are the same. Go owns its own idiomatic
 do not share a database.
 
 - **Stack:**
-  - Go 1.25+, stdlib `net/http`
+  - Go 1.26+, stdlib `net/http`
   - pgx/v5 + sqlc (PostgreSQL), goose migrations (embedded)
   - amqp091-go (RabbitMQ)
   - `log/slog`, `errgroup`, caarlos0/env
@@ -206,7 +206,8 @@ internal/
     reconciliation/           Sweeper, Checker, RunOnce
     ledgertest/               test-only helpers: containers, seeding, scenarios, hooks
 scripts/e2e.sh                end-to-end test (same checks as dotnet/scripts/e2e.sh)
-compose.yaml, Makefile, sqlc.yaml
+Dockerfile, compose.yaml   container image and full local stack (Postgres, RabbitMQ, API)
+Makefile, sqlc.yaml
 ```
 
 The payment provider is an in-memory fake, and its state is lost on restart. The e2e script uses that to exercise
@@ -216,11 +217,29 @@ the sweeper's resubmission path.
 
 ## Running
 
-**Prerequisites:** Go 1.25+, Docker.
+**Prerequisites:** Go 1.26+ (the module minimum, raised by its dependencies), Docker.
+
+**Everything in Docker** (Postgres, RabbitMQ and the API built from `Dockerfile`):
 
 ```bash
 cd golang
-make up        # Postgres 17 (db "wallet") + RabbitMQ 4 via compose.yaml
+docker compose up --build      # API on http://localhost:8080, RabbitMQ UI on http://localhost:15672
+docker compose down -v         # stop and delete the data volumes
+```
+
+The compose stack runs with `APP_ENV=development`, which migrates on startup and enables `/dev/provider`. For a
+production-style start:
+
+```bash
+docker compose up -d --wait postgres rabbitmq
+APP_ENV=production docker compose run --rm api migrate
+APP_ENV=production docker compose up -d api
+```
+
+**API on the host, dependencies in Docker:**
+
+```bash
+make up        # docker compose up -d postgres rabbitmq
 make run       # APP_ENV=development: applies migrations, enables /dev/provider; listens on :8080
 ```
 
@@ -303,7 +322,7 @@ Logs are JSON (`log/slog`) on stdout.
 | Bad request bodies | Return `Validation.<Field>` / `Validation.Body` titles instead of ASP.NET's model-state message. |
 | NUL bytes | Text containing a NUL byte is rejected with 400; .NET would hit a database error. |
 | Tests | Run against real Postgres instead of EF InMemory + interceptors. |
-| Local infrastructure | `compose.yaml` instead of the Aspire AppHost. There is no Redis or Kafka, which were unused, and no OpenTelemetry yet. |
+| Local infrastructure | `compose.yaml` (full stack including the API) instead of the Aspire AppHost. There is no Redis or Kafka, which were unused, and no OpenTelemetry yet. |
 
 **Known small divergences** (not yet addressed):
 - `"amount":"5000"` as a string is rejected; ASP.NET accepts it.

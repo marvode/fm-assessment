@@ -173,6 +173,7 @@ src/
     ServiceCollectionExtensions.cs   AddWallet / AddWalletBackgroundWorkers
 tests/Wallet.Tests/        xUnit: domain, handlers, persistence, outbox, payouts, reconciliation, API
 scripts/e2e.sh             end-to-end test against real Postgres + RabbitMQ
+Dockerfile, compose.yaml   container image and a full local stack without Aspire
 ```
 
 The payment provider is an in-memory fake (`FakePaymentProvider`). Its state is lost when the process restarts,
@@ -183,9 +184,21 @@ which the e2e script relies on to exercise the sweeper's resubmission path.
 ## Running
 
 **Prerequisites:**
-- .NET 10 SDK
-- Docker
+- Docker (enough for the compose stack)
+- .NET 10 SDK, for building, testing or running on the host
 - For orchestration, the Aspire CLI or the AppHost project
+
+**With Docker Compose** (Postgres, RabbitMQ and the API built from `Dockerfile`; no Aspire or .NET SDK needed):
+
+```bash
+cd dotnet
+docker compose up --build      # API on http://localhost:5568, RabbitMQ UI on http://localhost:15682
+docker compose down -v         # stop and delete the data volumes
+```
+
+The compose stack runs in `Development`, so EF migrations apply on startup and `/dev/provider`, `/health`, `/alive`,
+`/openapi/v1.json` and `/scalar/v1` are available. Its host ports (Postgres 5442, AMQP 5682) differ from the Go
+stack's, so both can run side by side.
 
 **With Aspire** (starts Postgres, RabbitMQ, Redis, Kafka and the API):
 

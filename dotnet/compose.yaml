@@ -1,0 +1,45 @@
+# Full local stack without Aspire: Postgres, RabbitMQ and Wallet.Api built from this folder.
+#   docker compose up --build            # API on http://localhost:5568
+# Host ports differ from golang/compose.yaml so both stacks can run side by side.
+# ASPNETCORE_ENVIRONMENT=Development applies EF migrations on startup and maps /dev/provider, /health, /alive,
+# /openapi/v1.json and /scalar/v1. Outside Development, migrations must be applied separately.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: appdb
+    ports: ["5442:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports: ["5682:5672", "15682:15672"]
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  api:
+    build: .
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__appdb: Host=postgres;Port=5432;Database=appdb;Username=postgres;Password=postgres
+      ConnectionStrings__messaging: amqp://guest:guest@rabbitmq:5672
+    ports: ["5568:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

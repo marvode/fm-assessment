@@ -1,10 +1,46 @@
+# Full local stack: Postgres, RabbitMQ and the Go wallet API built from this folder.
+#   docker compose up --build            # API on http://localhost:8080
+#   docker compose up -d postgres rabbitmq   # dependencies only (what `make up` does, for `make run`)
+# APP_ENV=development applies migrations on startup and enables /dev/provider for trying flows by hand.
+# For a production-style start, set APP_ENV=production and run `docker compose run --rm api migrate` first.
 services:
   postgres:
     image: postgres:17
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: wallet
     ports: ["5432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wallet"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   rabbitmq:
     image: rabbitmq:4-management
     ports: ["5672:5672", "15672:15672"]
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  api:
+    build: .
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/wallet?sslmode=disable
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

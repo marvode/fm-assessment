@@ -9,7 +9,7 @@ semantics. Design: `docs/superpowers/specs/2026-10-13-golang-port-design.md`.
 - **Lint:** `make lint` (gofmt, go vet, golangci-lint if installed)
 - **Regenerate queries:** `make generate` (sqlc in Docker). Never edit `internal/ledger/store/db/` by hand.
 - **End-to-end:** `make e2e` (needs docker, go, curl, jq, uuidgen)
-- **Run locally:** `make up && make run` (APP_ENV=development migrates and enables `/dev/provider`)
+- **Run locally:** `docker compose up --build` (full stack), or `make up && make run` (APP_ENV=development migrates and enables `/dev/provider`)
 
 ## Layout
 Feature slices live under `internal/ledger/` (wallets, topups, withdrawals, webhooks, outbox, payouts,

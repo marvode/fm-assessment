@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+tests/
+scripts/
+src/Wallet.AppHost/
+*.md
+compose.yaml
+Dockerfile

@@ -20,7 +20,7 @@ run:
 	$(DEV_ENV) go run ./cmd/wallet-api
 
 up:
-	docker compose up -d
+	docker compose up -d postgres rabbitmq
 
 down:
 	docker compose down
