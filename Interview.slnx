@@ -3,6 +3,7 @@
     <Project Path="src/Live.Api/Live.Api.csproj" />
     <Project Path="src/Live.AppHost/Live.AppHost.csproj" />
     <Project Path="src/Live.Core/Live.Core.csproj" />
+    <Project Path="src/Live.Wallet/Live.Wallet.csproj" />
     <Project Path="src/Live.ServiceDefaults/Live.ServiceDefaults.csproj" />
     <Project Path="src/Practice.Common/Practice.Common.csproj" />
   </Folder>
