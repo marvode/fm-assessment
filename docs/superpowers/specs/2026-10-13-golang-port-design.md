@@ -22,7 +22,14 @@ Success means the ported test suite (every .NET test scenario) and `golang/scrip
 - There is no `GET /` route (the .NET `HomeController` is not ported).
 - Local infrastructure comes from `compose.yaml` instead of the Aspire AppHost. Redis and Kafka, which the
   AppHost declares but the API never uses, are left out.
-- Tests run against real Postgres (testcontainers) instead of EF InMemory plus interceptors.
+- Tests run against real Postgres (testcontainers) instead of EF InMemory plus interceptors. Two invariant-checker
+  tests corrupt the ledger differently because Postgres enforces what InMemory did not. The stray ledger entry
+  references an existing transaction (foreign key), and the available>balance test drops the check constraint in its
+  throwaway database.
+- A top-up that loses the unique-index race twice returns `Concurrency.Exhausted` (409). In .NET the exception
+  escapes as a 500.
+- When the sweeper re-queues a payout and its save conflicts, it counts an error and moves on, instead of
+  aborting the sweep.
 - A body that cannot be bound (malformed JSON, missing field, wrong type) still returns 400 problem JSON, but its
   title is `Validation.<Field>` or `Validation.Body` instead of ASP.NET's "One or more validation errors
   occurred." Clients and tests only rely on the status code for these.
@@ -72,9 +79,13 @@ golang/
       withdrawals/            RequestWithdrawal, SettleWithdrawal, ReleaseWithdrawal
       webhooks/               ProviderWebhookHandler, event names
       outbox/                 Message, Relay, Publisher interface, RabbitPublisher, relay loop
-      payouts/                PayoutRequested, Processor, Consumer, topology
+      messages/               PayoutRequested + outbox message constructor (leaf package: withdrawals, payouts and
+                              reconciliation all enqueue it, and payouts also uses withdrawals)
+      payouts/                Processor, Consumer, topology
+      ledgertest/             test-only helpers: Postgres/RabbitMQ containers, seeding, scenarios
       reconciliation/         PendingPayoutSweeper, InvariantChecker, reconciliation loop
     api/                      router, problem.go, one handler file per .NET controller, health
+    app/                      composition root: builds every component from Config and runs them under errgroup
   scripts/e2e.sh
 ```
 
@@ -90,6 +101,7 @@ depend on other slices where .NET handlers do: `webhooks` uses `topups` and `wit
 | DI container | Constructors wired by hand in `main.go` (for example `withdrawals.NewRequestHandler(store, clock)`). |
 | Scoped `DbContext` | `*store.Store` wraps a `pgxpool.Pool`; each operation runs in one `pgx.Tx`. |
 | EF tracked entities + `Version` concurrency token | Rows load into `domain` structs, the domain methods (`PlaceHold`, `ReleaseHold`, `Credit`, `Debit`) mutate them in memory, and the store persists them. Account writes are `UPDATE accounts SET … , version = $new WHERE id = $id AND version = $old`; zero rows affected is a conflict. |
+| EF change tracking + `SaveChanges` | `store.Tx` is a small unit of work. Entities loaded through it are tracked (identity map), `Add*` stages inserts, and `store.Run` writes every change in one database transaction after the operation returns. A tracked account is updated only if its `version` is unchanged (`WHERE version = $loaded`). A tracked transaction is updated only if its `status` is unchanged, matching the EF concurrency token on `Status`. Zero rows updated, or a unique violation, is `store.ErrConflict`. |
 | `ConcurrencyRetry.ExecuteAsync` | `store.WithRetry(ctx, func(ctx, q *db.Queries) (T, error)) (T, error)`. It runs the function in a transaction. A domain error rolls back and returns. A version conflict or a Postgres `23505` rolls back and retries. After 3 attempts it returns `ErrConcurrencyExhausted`. |
 | `IOptions<WalletOptions>` | `config.Wallet`: `OutboxPollInterval` (1s), `OutboxBatchSize` (50), `SweeperInterval` (5m), `PendingThreshold` (15m), read from `WALLET_OUTBOX_POLL_INTERVAL`, `WALLET_OUTBOX_BATCH_SIZE`, `WALLET_SWEEPER_INTERVAL`, `WALLET_PENDING_THRESHOLD`. |
 | `BackgroundService` | Each worker exposes `Run(ctx) error` and loops on a `time.Ticker`. A failure in one tick is logged and never ends the loop. All workers and the HTTP server run under one `errgroup`, and shutdown is graceful on SIGINT/SIGTERM. |
@@ -204,11 +216,11 @@ All routes use the stdlib mux. A `{userId}` that is not a UUID returns 404, matc
 | `GET /users/{userId}/wallet` | 200 | `WalletResponse` |
 | `GET /users/{userId}/wallet/transactions` | 200 | `[]TransactionResponse` |
 | `POST /users/{userId}/top-ups` | 201 + `Location: /users/{id}/wallet/transactions`, or 200 on replay | body `{referenceId, amount}` |
-| `POST /users/{userId}/withdrawals` | 201, or 200 on replay | body `{referenceId, amount, bankCode, accountNumber, accountName}` |
-| `POST /webhooks/provider` | 200 + `TransactionResponse` | body `{event, providerReferenceId, reference?, amount}` |
+| `POST /users/{userId}/withdrawals` | 202 Accepted (no `Location`), or 200 on replay | body `{referenceId, amount, bankCode, accountNumber, accountName}` |
+| `POST /webhooks/provider` | 200 + `TransactionResponse` | body `{event, providerReferenceId, reference?, amount?}`; `amount` defaults to 0 |
 | `POST /dev/provider/{providerReferenceId}/complete?outcome=success\|failed` | 200 | Only when `APP_ENV=development`, otherwise 404. A bad outcome returns 400 `Validation.Outcome`. |
-| `GET /alive` | 200 | Liveness: the process is up. All environments. |
-| `GET /health` | 200 / 503 | Readiness: Postgres ping plus an open RabbitMQ connection. All environments. |
+| `GET /alive` | 200 `Healthy` | Liveness: the process is up. All environments. |
+| `GET /health` | 200 `Healthy` / 503 `Unhealthy` (text/plain, like ASP.NET health checks) | Readiness: Postgres ping plus an open RabbitMQ connection. All environments. |
 
 **JSON:**
 - camelCase keys, the same fields as `WalletResponse` / `TransactionResponse`;
