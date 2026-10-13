@@ -14,6 +14,7 @@ Always run and verify via terminal before finishing a task:
 - **Restore**: `dotnet restore`
 - **Build**: `dotnet build --no-restore`
 - **Run Tests**: `dotnet test --no-build --verbosity normal`
+- **End-to-End Tests**: `scripts/e2e.sh` (needs Docker, curl, jq; starts throwaway Postgres + RabbitMQ and the API, then tears them down)
 - **Format Code**: `dotnet format --verify-no-changes` (or `dotnet format` to apply fixes)
 - **Run App**: `dotnet run --project src/Wallet.Api` (or `aspire run` for Postgres + RabbitMQ)
 
